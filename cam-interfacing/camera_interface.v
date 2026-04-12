@@ -334,12 +334,9 @@ module camera_interface(
         .state(state)
     ); 
      
-    wire locked_24;
-    pll_24M m1 (
-        .clkin(clk),
-        .clkout(cmos_xclk),
-        .lock(locked_24)
-    );
+    // Bypass the 24MHz PLL to save hardware resources! 
+    // Feed the raw 27MHz clock directly to the camera.
+    assign cmos_xclk = clk;
      
     asyn_fifo #(.DATA_WIDTH(16), .FIFO_DEPTH_WIDTH(10)) m2 (
         .rst_n(rst_n),
