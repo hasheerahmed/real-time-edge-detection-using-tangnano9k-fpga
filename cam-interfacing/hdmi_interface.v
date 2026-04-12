@@ -108,21 +108,81 @@ module hdmi_interface (
         end
     end
 
-    // Serializer: 10 bits @ 125 MHz
-    wire [9:0] ser_r, ser_g, ser_b;
-    ODDR #(.DDR_TYPE("FULL")) oddr_r (
-        .Q(ser_r[0]), .D0(tmds_r[0]), .D1(tmds_r[1]), .CLK(clk_tmds), .RST(!rst_n)
-    );
-    // Repeat for all 10 bits... (for brevity, only shown for 2 bits)
-    // In a real implementation you would generate 10 ODDRs per channel.
+   // -----------------------------------------------------------------
+    // Gowin Hardware Serializers (10-to-1)
+    // -----------------------------------------------------------------
+    wire ser_r, ser_g, ser_b, ser_clk;
 
-    assign hdmi_data_p[0] = ser_r[0]; // etc.
-    // Clock differential
-    ODDR #(.DDR_TYPE("FULL")) oddr_clk (
-        .Q(hdmi_clk_p), .D0(1'b1), .D1(1'b0), .CLK(clk_pixel), .RST(!rst_n)
+    // Red Channel (HDMI Data 2)
+    OSER10 serializer_r (
+        .Q(ser_r),
+        .D0(tmds_r[0]), .D1(tmds_r[1]), .D2(tmds_r[2]), .D3(tmds_r[3]), .D4(tmds_r[4]),
+        .D5(tmds_r[5]), .D6(tmds_r[6]), .D7(tmds_r[7]), .D8(tmds_r[8]), .D9(tmds_r[9]),
+        .PCLK(clk_pixel), // 27 MHz
+        .FCLK(clk_tmds),  // 135 MHz
+        .RESET(~rst_n)
     );
-    assign hdmi_clk_n = ~hdmi_clk_p;
 
-    // For a complete design, you must generate all differential pairs.
-    // This is a simplified skeleton – refer to Tang Nano 9K HDMI examples.
+    // Green Channel (HDMI Data 1)
+    OSER10 serializer_g (
+        .Q(ser_g),
+        .D0(tmds_g[0]), .D1(tmds_g[1]), .D2(tmds_g[2]), .D3(tmds_g[3]), .D4(tmds_g[4]),
+        .D5(tmds_g[5]), .D6(tmds_g[6]), .D7(tmds_g[7]), .D8(tmds_g[8]), .D9(tmds_g[9]),
+        .PCLK(clk_pixel), 
+        .FCLK(clk_tmds),  
+        .RESET(~rst_n)
+    );
+
+    // Blue Channel (HDMI Data 0)
+    OSER10 serializer_b (
+        .Q(ser_b),
+        .D0(tmds_b[0]), .D1(tmds_b[1]), .D2(tmds_b[2]), .D3(tmds_b[3]), .D4(tmds_b[4]),
+        .D5(tmds_b[5]), .D6(tmds_b[6]), .D7(tmds_b[7]), .D8(tmds_b[8]), .D9(tmds_b[9]),
+        .PCLK(clk_pixel), 
+        .FCLK(clk_tmds),  
+        .RESET(~rst_n)
+    );
+
+    // Clock Channel (Sends a constant 10-bit pattern: 5 highs, 5 lows)
+    OSER10 serializer_clk (
+        .Q(ser_clk),
+        .D0(1'b1), .D1(1'b1), .D2(1'b1), .D3(1'b1), .D4(1'b1),
+        .D5(1'b0), .D6(1'b0), .D7(1'b0), .D8(1'b0), .D9(1'b0),
+        .PCLK(clk_pixel), 
+        .FCLK(clk_tmds),  
+        .RESET(~rst_n)
+    );
+
+    // -----------------------------------------------------------------
+    // Gowin True LVDS Output Buffers (Differential Pairs)
+    // -----------------------------------------------------------------
+    
+    // HDMI Clock
+    TLVDS_OBUF obuf_clk (
+        .O(hdmi_clk_p),
+        .OB(hdmi_clk_n),
+        .I(ser_clk)
+    );
+
+    // HDMI Data 2 (Red)
+    TLVDS_OBUF obuf_d2 (
+        .O(hdmi_data_p[2]),
+        .OB(hdmi_data_n[2]),
+        .I(ser_r)
+    );
+
+    // HDMI Data 1 (Green)
+    TLVDS_OBUF obuf_d1 (
+        .O(hdmi_data_p[1]),
+        .OB(hdmi_data_n[1]),
+        .I(ser_g)
+    );
+
+    // HDMI Data 0 (Blue)
+    TLVDS_OBUF obuf_d0 (
+        .O(hdmi_data_p[0]),
+        .OB(hdmi_data_n[0]),
+        .I(ser_b)
+    );
+
 endmodule
