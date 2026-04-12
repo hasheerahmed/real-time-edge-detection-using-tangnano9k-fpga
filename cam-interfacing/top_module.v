@@ -1,9 +1,11 @@
 `timescale 1ns / 1ps
 
 module top_module (
-    input  wire       clk,
-    input  wire       rst_n,
-    input  wire [3:0] key,
+    input  wire       clk,          // 27MHz onboard crystal
+    input  wire       rst_n,        // S1 button for reset
+    input  wire [3:0] key,          // External keys if used
+    
+    // Camera interface (OV2640)
     input  wire       cam_pclk,
     input  wire       cam_href,
     input  wire       cam_vsync,
@@ -11,56 +13,90 @@ module top_module (
     inout  wire       cam_sda,
     inout  wire       cam_scl,
     output wire       cam_xclk,
+    
+    // HDMI output
     output wire       hsync,
     output wire       vsync,
     output wire       hdmi_clk_p,
     output wire       hdmi_clk_n,
     output wire [2:0] hdmi_data_p,
     output wire [2:0] hdmi_data_n,
-    output wire [3:0] led
+    
+    // LEDs
+    output wire [5:0] led
 );
 
-    // Simple test - blink LED to verify FPGA works
-    reg [24:0] counter = 0;
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
-            counter <= 0;
-        else
-            counter <= counter + 1;
-    end
-    
     // ============================================
-    // LED Assignments
+    // Clock Generation (PLLs)
     // ============================================
-    
-    // LED0: Blink test (FPGA working indicator)
-    assign led[0] = counter[24];
-    
+    wire clk_100M, clk_125M, clk_25M;
+    wire locked_100, locked_125, locked_25;
+
+    // NOTE: Ensure these PLL IPs are generated with a 27MHz FCLKIN in Gowin!
+    pll_100M pll1 (.clk(clk), .clk_sdram(clk_100M), .RESET(~rst_n), .LOCKED(locked_100));
+    pll_125M pll2 (.clk(clk), .clk_sdram(clk_125M), .RESET(~rst_n), .LOCKED(locked_125));
+    pll_25M  pll3 (.clk(clk), .clk_out(clk_25M),    .RESET(~rst_n), .LOCKED(locked_25));
+
+    wire sys_reset_n = rst_n & locked_100 & locked_125 & locked_25;
+
     // ============================================
-    // Camera Connection Test (ADD THESE LINES)
+    // Camera Interface Instance
     // ============================================
-    // LED1: Shows camera data bit 0 (should flicker if camera is sending data)
-    assign led[1] = cam_data[0];
+    wire [15:0] pixel_data;
+    wire        cam_rd_en;
+    wire [9:0]  fifo_count;
+    wire [3:0]  cam_led_status;
+
+    camera_interface cam_inst (
+        .clk(clk), 
+        .clk_100(clk_100M), 
+        .rst_n(sys_reset_n),
+        .key(key),
+        .rd_en(cam_rd_en),
+        .data_count_r(fifo_count),
+        .dout(pixel_data),
+        .cmos_pclk(cam_pclk), 
+        .cmos_href(cam_href), 
+        .cmos_vsync(cam_vsync),
+        .cmos_db(cam_data),
+        .cmos_sda(cam_sda), 
+        .cmos_scl(cam_scl),
+        .cmos_xclk(cam_xclk),
+        .led(cam_led_status)
+    );
+
+    // ============================================
+    // HDMI Interface Instance
+    // ============================================
+    // Currently acting as a pure pass-through for the RGB data.
+    // Edge detection logic (Sobel/Canny) will eventually go between cam_inst and hdmi_inst!
+
+    // We only read from the camera FIFO when the HDMI pixel generator is actively requesting data
+    wire video_active; 
     
-    // LED2: Shows camera pixel clock (should blink at ~24-48MHz - looks constantly on)
-    assign led[2] = cam_pclk;
-    
-    // LED3: Shows camera vertical sync (should blink once per frame - about every 33ms)
-    assign led[3] = cam_vsync;
-    
-    // Simple pass-through for testing
-    assign cam_xclk = clk;
-    assign hsync = cam_href;
-    assign vsync = cam_vsync;
-    
-    // Simple HDMI output (just for testing)
-    assign hdmi_clk_p = clk;
-    assign hdmi_clk_n = ~clk;
-    assign hdmi_data_p[0] = cam_data[0];
-    assign hdmi_data_n[0] = ~cam_data[0];
-    assign hdmi_data_p[1] = cam_data[1];
-    assign hdmi_data_n[1] = ~cam_data[1];
-    assign hdmi_data_p[2] = cam_data[2];
-    assign hdmi_data_n[2] = ~cam_data[2];
+    hdmi_interface hdmi_inst (
+        .clk_cam(clk_100M),
+        .clk_pixel(clk_25M),
+        .clk_tmds(clk_125M),
+        .rst_n(sys_reset_n),
+        .rgb_in(pixel_data),
+        .wr_en(1'b1),            // Assuming continuous write available
+        .rd_en(cam_rd_en),       // Fed back to camera FIFO
+        .hdmi_hs(hsync), 
+        .hdmi_vs(vsync),
+        .hdmi_de(video_active),
+        .hdmi_clk_p(hdmi_clk_p), 
+        .hdmi_clk_n(hdmi_clk_n),
+        .hdmi_data_p(hdmi_data_p), 
+        .hdmi_data_n(hdmi_data_n)
+    );
+
+    // ============================================
+    // LED Assignments (Active Low)
+    // ============================================
+    // Invert the signals so 1 = ON, 0 = OFF for your logic
+    assign led[3:0] = ~cam_led_status; 
+    assign led[4]   = ~sys_reset_n;     // LED5 ON if PLLs lose lock or in reset
+    assign led[5]   = ~cam_vsync;       // LED6 blinks on new frame
 
 endmodule
