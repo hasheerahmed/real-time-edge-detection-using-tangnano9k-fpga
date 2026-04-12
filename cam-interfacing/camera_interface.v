@@ -337,7 +337,7 @@ module camera_interface(
     pll_24M m1 (
         .clkin(clk),
         .clkout(cmos_xclk),
-        .locked()
+        .lock()      // <-- Change from .locked() to .lock()
     );
      
     asyn_fifo #(.DATA_WIDTH(16), .FIFO_DEPTH_WIDTH(10)) m2 (
