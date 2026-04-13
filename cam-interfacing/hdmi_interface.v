@@ -69,37 +69,43 @@ module hdmi_interface (
     assign fifo_rd_en = active & !fifo_empty;
     assign rd_en = wr_en;   // Actually rd_en for camera FIFO is not needed here; we use separate FIFO.
 
-        // -----------------------------------------------------------------
+            // -----------------------------------------------------------------
     // REAL TMDS encoder with DC Balancing
     // -----------------------------------------------------------------
     wire [9:0] tmds_r, tmds_g, tmds_b;
 
+    // If the camera is slow and FIFO runs dry, output black pixels, but NEVER drop VDE!
+    wire [7:0] px_b = (!fifo_empty) ? {fifo_dout[4:0], 3'b000} : 8'h00;
+    wire [7:0] px_g = (!fifo_empty) ? {fifo_dout[10:5], 2'b00} : 8'h00;
+    wire [7:0] px_r = (!fifo_empty) ? {fifo_dout[15:11], 3'b000} : 8'h00;
+
     // Blue channel MUST carry HSYNC and VSYNC on the control lines!
     tmds_encoder enc_b (
         .clk(clk_pixel),
-        .VD({fifo_dout[4:0], 3'b000}),
+        .VD(px_b),
         .CD({vs, hs}),
-        .VDE(active && !fifo_empty),
+        .VDE(active), // STRICTLY tied to timing! No fifo_empty here!
         .TMDS(tmds_b)
     );
 
     // Green channel
     tmds_encoder enc_g (
         .clk(clk_pixel),
-        .VD({fifo_dout[10:5], 2'b00}),
+        .VD(px_g),
         .CD(2'b00),
-        .VDE(active && !fifo_empty),
+        .VDE(active), // STRICTLY tied to timing!
         .TMDS(tmds_g)
     );
 
     // Red channel
     tmds_encoder enc_r (
         .clk(clk_pixel),
-        .VD({fifo_dout[15:11], 3'b000}),
+        .VD(px_r),
         .CD(2'b00),
-        .VDE(active && !fifo_empty),
+        .VDE(active), // STRICTLY tied to timing!
         .TMDS(tmds_r)
     );
+
 
    // -----------------------------------------------------------------
     // Gowin Hardware Serializers (10-to-1)
