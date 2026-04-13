@@ -175,6 +175,9 @@ module camera_interface(
         end
     end
      
+    // ========================================================
+    // FSM NEXT-STATE LOGIC (AUTO-RETRY & DELAY FIX)
+    // ========================================================
     always @* begin
         state_d = state_q;
         led_d = led_q;
@@ -187,14 +190,11 @@ module camera_interface(
         message_index_d = message_index_q;
         pixel_d = pixel_q;
         wr_en = 0;
-        sccb_state_d = sccb_state_q;
-        addr_d = addr_q;
-        data_d = data_q;
-        brightness_d = brightness_q;
-        contrast_d = contrast_q;
         
+        // 1. DYNAMIC STARTUP DELAY
         if(start_delay_q) delay_d = delay_q + 1'b1;
-        if(delay_q[16] && message_index_q != (MSG_INDEX+1) && (state_q != start_sccb)) begin
+        
+        if((message_index_q == 0 ? delay_q[24] : delay_q[16]) && message_index_q != (MSG_INDEX+1) && (state_q != start_sccb)) begin
             delay_finish = 1;
             start_delay_d = 0;
             delay_d = 0;
@@ -204,56 +204,83 @@ module camera_interface(
             delay_d = 0;
         end
         
+        // 2. I2C STATE MACHINE
         case(state_q) 
             idle: if(delay_finish) begin
-                    state_d = start_sccb; 
+                    state_d = start_sccb;
                     start_delay_d = 0;
                   end else start_delay_d = 1;
+                  
             start_sccb: begin
                     start = 1;
                     wr_data = 8'h42;
                     state_d = write_address;                        
                   end
-            write_address: if(ack==2'b11) begin 
+                  
+            write_address: 
+                  if(ack==2'b11) begin 
                     wr_data = message[message_index_q][15:8];
                     state_d = write_data;
+                  end else if(ack==2'b10) begin 
+                    stop = 1;
+                    start_delay_d = 1;
+                    state_d = delay;
                   end
-            write_data: if(ack==2'b11) begin 
+                  
+            write_data: 
+                  if(ack==2'b11) begin 
                     wr_data = message[message_index_q][7:0];
                     state_d = digest_loop;
+                  end else if(ack==2'b10) begin 
+                    stop = 1;
+                    start_delay_d = 1;
+                    state_d = delay;
                   end
-            digest_loop: if(ack==2'b11) begin
+                  
+            digest_loop: 
+                  if(ack==2'b11) begin
                     stop = 1;
                     start_delay_d = 1;
                     message_index_d = message_index_q + 1'b1;
                     state_d = delay;
+                  end else if(ack==2'b10) begin 
+                    stop = 1;
+                    start_delay_d = 1;
+                    state_d = delay;
                   end
+                  
             delay: begin
                     if(message_index_q == (MSG_INDEX+1) && delay_finish) begin 
                         state_d = vsync_fedge;
-                        led_d = 4'b0110;
+                        led_d = 4'b0110; 
                     end else if(state==0 && delay_finish) state_d = start_sccb;
                   end
+                  
             vsync_fedge: if(vsync_1==0 && vsync_2==1) state_d = byte1;
+            
             byte1: if(pclk_1==1 && pclk_2==0 && href_1==1 && href_2==1) begin
                         pixel_d[15:8] = cmos_db;
                         state_d = byte2;
                     end else if(vsync_1==1 && vsync_2==1) begin
                         state_d = vsync_fedge;
                     end
+                    
             byte2: if(pclk_1==1 && pclk_2==0 && href_1==1 && href_2==1) begin
                         pixel_d[7:0] = cmos_db;
                         state_d = fifo_write;
                     end else if(vsync_1==1 && vsync_2==1) begin
                         state_d = vsync_fedge;
                     end
+                    
             fifo_write: begin
                         wr_en = 1;
                         state_d = byte1;
                         if(full) led_d = 4'b1001;
                     end
+                    
             default: state_d = idle;
         endcase
+    end
         
         case(sccb_state_q)
             wait_init: if(state_q == byte1) begin
