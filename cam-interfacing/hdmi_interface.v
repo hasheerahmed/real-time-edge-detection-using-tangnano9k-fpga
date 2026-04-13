@@ -69,44 +69,37 @@ module hdmi_interface (
     assign fifo_rd_en = active & !fifo_empty;
     assign rd_en = wr_en;   // Actually rd_en for camera FIFO is not needed here; we use separate FIFO.
 
+        // -----------------------------------------------------------------
+    // REAL TMDS encoder with DC Balancing
     // -----------------------------------------------------------------
-    // TMDS encoder + serializer
-    // -----------------------------------------------------------------
-    reg [9:0] tmds_r, tmds_g, tmds_b;
+    wire [9:0] tmds_r, tmds_g, tmds_b;
 
-    // Simple TMDS encoding (8b/10b for HDMI)
-    function [9:0] tmds_encode;
-        input [7:0] data;
-        input       ctrl;
-        input [1:0] ctrl_mode;
-        begin
-            if (ctrl) begin
-                case (ctrl_mode)
-                    2'b00: tmds_encode = 10'b1101010100; // HSync
-                    2'b01: tmds_encode = 10'b0010101011; // VSync
-                    2'b10: tmds_encode = 10'b0101010100; // Control 2
-                    2'b11: tmds_encode = 10'b1010101011; // Control 3
-                endcase
-            end else begin
-                // Simplified encoding – for real projects use full TMDS algorithm
-                tmds_encode = {data[0], data[1], data[2], data[3], data[4],
-                               data[5], data[6], data[7], 1'b0, 1'b1};
-            end
-        end
-    endfunction
+    // Blue channel MUST carry HSYNC and VSYNC on the control lines!
+    tmds_encoder enc_b (
+        .clk(clk_pixel),
+        .VD({fifo_dout[4:0], 3'b000}),
+        .CD({vs, hs}),
+        .VDE(active && !fifo_empty),
+        .TMDS(tmds_b)
+    );
 
-    always @(posedge clk_pixel) begin
-        if (active && !fifo_empty) begin
-            // RGB565 to 8-bit per channel (simple expansion)
-            tmds_r <= tmds_encode({fifo_dout[15:11], 3'b0}, 1'b0, 2'b00);
-            tmds_g <= tmds_encode({fifo_dout[10:5], 2'b0}, 1'b0, 2'b00);
-            tmds_b <= tmds_encode({fifo_dout[4:0], 3'b0}, 1'b0, 2'b00);
-        end else begin
-            tmds_r <= tmds_encode(8'h00, 1'b1, {hs, vs});
-            tmds_g <= tmds_encode(8'h00, 1'b1, 2'b00);
-            tmds_b <= tmds_encode(8'h00, 1'b1, 2'b00);
-        end
-    end
+    // Green channel
+    tmds_encoder enc_g (
+        .clk(clk_pixel),
+        .VD({fifo_dout[10:5], 2'b00}),
+        .CD(2'b00),
+        .VDE(active && !fifo_empty),
+        .TMDS(tmds_g)
+    );
+
+    // Red channel
+    tmds_encoder enc_r (
+        .clk(clk_pixel),
+        .VD({fifo_dout[15:11], 3'b000}),
+        .CD(2'b00),
+        .VDE(active && !fifo_empty),
+        .TMDS(tmds_r)
+    );
 
    // -----------------------------------------------------------------
     // Gowin Hardware Serializers (10-to-1)
