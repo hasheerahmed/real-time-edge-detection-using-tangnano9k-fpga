@@ -153,33 +153,33 @@ module hdmi_interface (
         .RESET(~rst_n)
     );
 
-    // -----------------------------------------------------------------
-    // Gowin True LVDS Output Buffers (Differential Pairs)
+    //     // -----------------------------------------------------------------
+    // Gowin Emulated LVDS Output Buffers (Differential Pairs)
     // -----------------------------------------------------------------
     
     // HDMI Clock
-    TLVDS_OBUF obuf_clk (
+    ELVDS_OBUF obuf_clk (
         .O(hdmi_clk_p),
         .OB(hdmi_clk_n),
         .I(ser_clk)
     );
 
     // HDMI Data 2 (Red)
-    TLVDS_OBUF obuf_d2 (
+    ELVDS_OBUF obuf_d2 (
         .O(hdmi_data_p[2]),
         .OB(hdmi_data_n[2]),
         .I(ser_r)
     );
 
     // HDMI Data 1 (Green)
-    TLVDS_OBUF obuf_d1 (
+    ELVDS_OBUF obuf_d1 (
         .O(hdmi_data_p[1]),
         .OB(hdmi_data_n[1]),
         .I(ser_g)
     );
 
     // HDMI Data 0 (Blue)
-    TLVDS_OBUF obuf_d0 (
+    ELVDS_OBUF obuf_d0 (
         .O(hdmi_data_p[0]),
         .OB(hdmi_data_n[0]),
         .I(ser_b)
