@@ -84,7 +84,6 @@ module top_module (
         .rst_n(sys_reset_n),
      
      // 135MHz serial clock (exactly 5x 27MHz)
-        .rst_n(sys_reset_n),
         .rgb_in(pixel_data),
         .wr_en(cam_rd_en),            // BUG 2 fix
         .rd_en(hdmi_rd_en_unused), 
