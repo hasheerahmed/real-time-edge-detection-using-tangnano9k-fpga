@@ -201,7 +201,7 @@ module camera_interface (
                 end
 
                 S_DELAY: begin
-                    wire dly_done;
+                 
                     // Inline logic: done when correct bit sets
                     if ((msg_idx == 0 ? dly_cnt[22] : dly_cnt[16])) begin
                         dly_cnt <= 0;
