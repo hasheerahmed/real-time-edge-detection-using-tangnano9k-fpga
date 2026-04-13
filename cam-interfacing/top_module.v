@@ -26,29 +26,23 @@ module top_module (
     output wire [5:0] led
 );
 
-    // ============================================
-    // Clock Generation (PLLs) - The 27MHz Trick!
+        // ============================================
+    // Clock Generation (PLLs & Dividers)
     // ============================================
     wire clk_108M, clk_135M;
     wire locked_108, locked_135;
 
-    // 108 MHz System / Camera Fast Clock
-    pll_108M pll1 (
-        .clkin(clk),
-        .clkout(clk_108M),
-        .lock(locked_108)
+    pll_108M pll1 (.clkin(clk), .clkout(clk_108M), .lock(locked_108));
+    pll_135M pll2 (.clkin(clk), .clkout(clk_135M), .lock(locked_135));
+    
+    // GENERATE A PERFECTLY PHASE-ALIGNED 27MHz PIXEL CLOCK
+    wire clk_pixel_aligned;
+    CLKDIV #(.DIV_MODE("5")) clk_div_inst (
+        .RESETN(locked_135),
+        .HCLKIN(clk_135M),        // Divide the 135MHz clock by 5
+        .CLKOUT(clk_pixel_aligned) // Output perfectly aligned 27MHz
     );
 
-    // 135 MHz HDMI TMDS Serial Clock
-    pll_135M pll2 (
-        .clkin(clk),
-        .clkout(clk_135M),
-        .lock(locked_135)
-    );
-    
-    // We use the raw 27MHz 'clk' directly for the HDMI pixel clock!
-    
-    // The system only starts when BOTH high-speed clocks are stable
     wire sys_reset_n = rst_n & locked_108 & locked_135;
 
     // ============================================
@@ -82,10 +76,13 @@ module top_module (
     // ============================================
     wire video_active; 
     
-    hdmi_interface hdmi_inst (
-        .clk_cam(clk_108M),      // Fast write clock to read from camera FIFO
-        .clk_pixel(clk),         // 27MHz base pixel clock!
-        .clk_tmds(clk_135M),     // 135MHz serial clock (exactly 5x 27MHz)
+        hdmi_interface hdmi_inst (
+        .clk_cam(clk_108M),      
+        .clk_pixel(clk_pixel_aligned), // USE THE NEW ALIGNED CLOCK HERE!
+        .clk_tmds(clk_135M),     
+        .rst_n(sys_reset_n),
+     
+     // 135MHz serial clock (exactly 5x 27MHz)
         .rst_n(sys_reset_n),
         .rgb_in(pixel_data),
         .wr_en(1'b1),            
