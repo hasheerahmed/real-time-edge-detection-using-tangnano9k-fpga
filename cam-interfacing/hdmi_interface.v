@@ -67,7 +67,7 @@ module hdmi_interface (
     );
 
     assign fifo_rd_en = active & !fifo_empty;
-    assign rd_en = wr_en;   // Actually rd_en for camera FIFO is not needed here; we use separate FIFO.
+    assign rd_en = 1'b0;  // Actually rd_en for camera FIFO is not needed here; we use separate FIFO.
 
             // -----------------------------------------------------------------
     // REAL TMDS encoder with DC Balancing
