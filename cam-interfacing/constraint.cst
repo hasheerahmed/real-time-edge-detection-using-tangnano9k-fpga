@@ -78,13 +78,13 @@ IO_PORT "cam_data[0]" IO_TYPE=LVCMOS33;
 // HDMI Pins (Standard Tang Nano 9K TLVDS)
 // ========================================
 IO_LOC "hdmi_clk_p" 69;
-IO_PORT "hdmi_clk_p" IO_TYPE=TLVDS25E;
+IO_PORT "hdmi_clk_p" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
 
 IO_LOC "hdmi_data_p[0]" 71;
-IO_PORT "hdmi_data_p[0]" IO_TYPE=TLVDS25E;
+IO_PORT "hdmi_data_p[0]" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
 
 IO_LOC "hdmi_data_p[1]" 73;
-IO_PORT "hdmi_data_p[1]" IO_TYPE=TLVDS25E;
+IO_PORT "hdmi_data_p[1]" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
 
 IO_LOC "hdmi_data_p[2]" 75;
-IO_PORT "hdmi_data_p[2]" IO_TYPE=TLVDS25E;
+IO_PORT "hdmi_data_p[2]" IO_TYPE=LVCMOS33D PULL_MODE=NONE DRIVE=8;
