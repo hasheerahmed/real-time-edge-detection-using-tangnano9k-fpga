@@ -1,197 +1,150 @@
 `timescale 1ns / 1ps
 
-module camera_interface(
-    input wire clk, clk_100, rst_n,
-    input wire[3:0] key,
-    input wire rd_en,
-    output wire[9:0] data_count_r,
-    output wire[15:0] dout,
-    input wire cmos_pclk, cmos_href, cmos_vsync,
-    input wire[7:0] cmos_db,
-    inout cmos_sda, cmos_scl,
-    output wire cmos_xclk,
-    output wire[3:0] led
-);
+module camera_interface (
+    input  wire        clk,         // 27MHz base input
+    input  wire        clk_100,     // 108MHz (Fast FSM & I2C clock)
+    input  wire        rst_n,
+    input  wire [3:0]  key,         // Unused, but kept for top_module compatibility
     
-    // FSM state declarations
-    localparam idle=0,
-               start_sccb=1,
-               write_address=2,
-               write_data=3,
-               digest_loop=4,
-               delay=5,
-               vsync_fedge=6,
-               byte1=7,
-               byte2=8,
-               fifo_write=9,
-               stopping=10;
-                    
-    localparam wait_init=0,
-               sccb_idle=1,
-               sccb_address=2,
-               sccb_data=3,
-               sccb_stop=4;
-                    
-    localparam MSG_INDEX=77;
-     
-    reg[3:0] state_q=0, state_d;
-    reg[2:0] sccb_state_q=0, sccb_state_d;
-    reg[7:0] addr_q=0, addr_d;
-    reg[7:0] data_q=0, data_d;
-    reg[7:0] brightness_q=0, brightness_d;
-    reg[7:0] contrast_q=0, contrast_d;
-    reg start, stop;
-    reg[7:0] wr_data;
-    wire rd_tick;
-    wire[1:0] ack;
-    wire[7:0] rd_data;
-    wire[3:0] state;
-    reg[3:0] led_q=0, led_d; 
-    reg[27:0] delay_q=0, delay_d;
-    reg start_delay_q=0, start_delay_d;
-    reg delay_finish;
-    reg[15:0] message[250:0];
-    reg[7:0] message_index_q=0, message_index_d;
-    reg[15:0] pixel_q=0, pixel_d;
-    reg wr_en;
-    wire full;
-    wire key0_tick, key1_tick, key2_tick, key3_tick;
-     
-    // Buffer for all inputs coming from the camera
-    reg pclk_1=0, pclk_2=0, href_1=0, href_2=0, vsync_1=0, vsync_2=0;
+    // Output to HDMI Interface
+    output wire        rd_en,       // Acts as write_enable for the next stage
+    output wire [9:0]  data_count_r,
+    output wire [15:0] dout,
+    
+    // Physical Camera Pins
+    input  wire        cmos_pclk,
+    input  wire        cmos_href,
+    input  wire        cmos_vsync,
+    input  wire [7:0]  cmos_db,
+    inout  wire        cmos_sda,
+    inout  wire        cmos_scl,
+    output wire        cmos_xclk,
+    
+    // Debug LEDs
+    output wire [3:0]  led
+);
+
+    // ========================================================
+    // 1. CLOCK & SYNC
+    // ========================================================
+    // Bypass PLL: Feed physical 27MHz directly to camera!
+    assign cmos_xclk = clk;
+    assign data_count_r = 10'd0; // Unused 
+
+    // Synchronize camera timing signals to our fast 108MHz clock
+    reg vsync_1, vsync_2;
+    reg pclk_1, pclk_2;
+    reg href_1, href_2;
+
+    always @(posedge clk_100) begin
+        vsync_1 <= cmos_vsync; vsync_2 <= vsync_1;
+        pclk_1  <= cmos_pclk;  pclk_2  <= pclk_1;
+        href_1  <= cmos_href;  href_2  <= href_1;
+    end
+
+    // ========================================================
+    // 2. I2C MASTER
+    // ========================================================
+    reg        start, stop;
+    reg  [7:0] wr_data;
+    wire [1:0] ack;
+
+    i2c_top i2c_inst (
+        .clk(clk_100),
+        .rst_n(rst_n),
+        .start(start),
+        .stop(stop),
+        .wr_data(wr_data),
+        .ack(ack),
+        .sda(cmos_sda),
+        .scl(cmos_scl),
+        .idle()
+    );
+
+    // ========================================================
+    // 3. FSM REGISTERS
+    // ========================================================
+    localparam idle = 0, start_sccb = 1, write_address = 2, write_data = 3, 
+               digest_loop = 4, delay = 5, vsync_fedge = 6, byte1 = 7, 
+               byte2 = 8, fifo_write = 9;
+
+    reg [3:0]  state_q = idle, state_d;
+    reg [26:0] delay_q = 0, delay_d;
+    reg        start_delay_q = 0, start_delay_d;
+    reg [8:0]  message_index_q = 0, message_index_d;
+    reg        delay_finish;
+    
+    reg [3:0]  led_q = 4'b1111, led_d;
+    reg [15:0] pixel_q = 0, pixel_d;
+    reg        wr_en_q = 0, wr_en_d;
+
+    assign led = led_q;
+    assign dout = pixel_q;
+    assign rd_en = wr_en_q;
+
+    // ========================================================
+    // 4. OV2640 INITIALIZATION ROM (VGA RGB565)
+    // ========================================================
+    localparam MSG_INDEX = 40;
+    reg [15:0] message [0:MSG_INDEX];
 
     initial begin
-        message[0]=16'h12_80;
-        message[1]=16'h12_04;
-        message[2]=16'h15_20;
-        message[3]=16'h40_d0;
-        message[4]=16'h12_04;
-        message[5]=16'h11_80;
-        message[6]=16'h0C_00;
-        message[7]=16'h3E_00;
-        message[8]=16'h04_00;
-        message[9]=16'h40_d0;
-        message[10]=16'h3a_04;
-        message[11]=16'h14_18;
-        message[12]=16'h4F_B3;
-        message[13]=16'h50_B3;
-        message[14]=16'h51_00;
-        message[15]=16'h52_3d;
-        message[16]=16'h53_A7;
-        message[17]=16'h54_E4;
-        message[18]=16'h58_9E;
-        message[19]=16'h3D_C0;
-        message[20]=16'h17_14;
-        message[21]=16'h18_02;
-        message[22]=16'h32_80;
-        message[23]=16'h19_03;
-        message[24]=16'h1A_7B;
-        message[25]=16'h03_0A;
-        message[26]=16'h0F_41;
-        message[27]=16'h1E_00;
-        message[28]=16'h33_0B;
-        message[29]=16'h3C_78;
-        message[30]=16'h69_00;
-        message[31]=16'h74_00;
-        message[32]=16'hB0_84;
-        message[33]=16'hB1_0c;
-        message[34]=16'hB2_0e;
-        message[35]=16'hB3_80;
-        message[36]=16'h70_3a;
-        message[37]=16'h71_35;
-        message[38]=16'h72_11;
-        message[39]=16'h73_f0;
-        message[40]=16'ha2_02;
-        message[41]=16'h7a_20;
-        message[42]=16'h7b_10;
-        message[43]=16'h7c_1e;
-        message[44]=16'h7d_35;
-        message[45]=16'h7e_5a;
-        message[46]=16'h7f_69;
-        message[47]=16'h80_76;
-        message[48]=16'h81_80;
-        message[49]=16'h82_88;
-        message[50]=16'h83_8f;
-        message[51]=16'h84_96;
-        message[52]=16'h85_a3;
-        message[53]=16'h86_af;
-        message[54]=16'h87_c4;
-        message[55]=16'h88_d7;
-        message[56]=16'h89_e8;
-        message[57]=16'h13_e0;
-        message[58]=16'h00_00;
-        message[59]=16'h10_00;
-        message[60]=16'h0d_40;
-        message[61]=16'h14_18;
-        message[62]=16'ha5_05;
-        message[63]=16'hab_07;
-        message[64]=16'h24_95;
-        message[65]=16'h25_33;
-        message[66]=16'h26_e3;
-        message[67]=16'h9f_78;
-        message[68]=16'ha0_68;
-        message[69]=16'ha1_03;
-        message[70]=16'ha6_d8;
-        message[71]=16'ha7_d8;
-        message[72]=16'ha8_f0;
-        message[73]=16'ha9_90;
-        message[74]=16'haa_94;
-        message[75]=16'h13_e5;
-        message[76]=16'h1E_23;
-        message[77]=16'h69_06;
+        message[0] = 16'hFF_01; message[1] = 16'h12_80; message[2] = 16'hFF_00;
+        message[3] = 16'h2C_FF; message[4] = 16'h2E_DF; message[5] = 16'hFF_01;
+        message[6] = 16'h3C_32; message[7] = 16'h11_00; message[8] = 16'h09_02;
+        message[9] = 16'h04_28; message[10]= 16'h13_E5; message[11]= 16'h14_48;
+        message[12]= 16'h2C_0C; message[13]= 16'h33_78; message[14]= 16'h3A_33;
+        message[15]= 16'h3B_FB; message[16]= 16'h3E_00; message[17]= 16'h43_11;
+        message[18]= 16'h16_02; message[19]= 16'h39_02; message[20]= 16'h35_88;
+        message[21]= 16'h22_0A; message[22]= 16'h37_40; message[23]= 16'h23_00;
+        message[24]= 16'h34_A0; message[25]= 16'h36_1A; message[26]= 16'h06_02;
+        message[27]= 16'h0C_00; message[28]= 16'h0D_B7; message[29]= 16'h0E_01;
+        message[30]= 16'h15_00; message[31]= 16'hFF_00; message[32]= 16'hE5_7F;
+        message[33]= 16'hF9_C0; message[34]= 16'h41_24; message[35]= 16'hE0_14;
+        message[36]= 16'h76_B5; message[37]= 16'h33_E5; message[38]= 16'h34_48;
+        message[39]= 16'h40_C0; message[40]= 16'hDA_00; 
     end
-     
-    always @(posedge clk_100, negedge rst_n) begin
-        if(!rst_n) begin
-            state_q <= 0;
-            led_q <= 0;
-            delay_q <= 0;
-            start_delay_q <= 0;
+
+    // ========================================================
+    // 5. SEQUENTIAL LOGIC
+    // ========================================================
+    always @(posedge clk_100 or negedge rst_n) begin
+        if (!rst_n) begin
+            state_q         <= idle;
+            delay_q         <= 0;
+            start_delay_q   <= 0;
             message_index_q <= 0;
-            pixel_q <= 0;
-            sccb_state_q <= 0;
-            addr_q <= 0;
-            data_q <= 0;
-            brightness_q <= 0;
-            contrast_q <= 0;
+            led_q           <= 4'b1111;
+            pixel_q         <= 0;
+            wr_en_q         <= 0;
         end else begin
-            state_q <= state_d;
-            led_q <= led_d;
-            delay_q <= delay_d;
-            start_delay_q <= start_delay_d;
-            message_index_q <= message_index_d;            
-            pclk_1 <= cmos_pclk; 
-            pclk_2 <= pclk_1;
-            href_1 <= cmos_href;
-            href_2 <= href_1;
-            vsync_1 <= cmos_vsync;
-            vsync_2 <= vsync_1;
-            pixel_q <= pixel_d;
-            sccb_state_q <= sccb_state_d;
-            addr_q <= addr_d;
-            data_q <= data_d;
-            brightness_q <= brightness_d;
-            contrast_q <= contrast_d;
+            state_q         <= state_d;
+            delay_q         <= delay_d;
+            start_delay_q   <= start_delay_d;
+            message_index_q <= message_index_d;
+            led_q           <= led_d;
+            pixel_q         <= pixel_d;
+            wr_en_q         <= wr_en_d;
         end
     end
-     
+
     // ========================================================
-    // FSM NEXT-STATE LOGIC (AUTO-RETRY & DELAY FIX)
+    // 6. FSM NEXT-STATE LOGIC (Auto-Retry + Pixel Capture)
     // ========================================================
     always @* begin
-        state_d = state_q;
-        led_d = led_q;
-        start = 0;
-        stop = 0;
-        wr_data = 0;
-        start_delay_d = start_delay_q;
-        delay_d = delay_q;
-        delay_finish = 0;
+        state_d         = state_q;
+        led_d           = led_q;
+        start           = 0;
+        stop            = 0;
+        wr_data         = 0;
+        start_delay_d   = start_delay_q;
+        delay_d         = delay_q;
+        delay_finish    = 0;
         message_index_d = message_index_q;
-        pixel_d = pixel_q;
-        wr_en = 0;
+        pixel_d         = pixel_q;
+        wr_en_d         = 0;
         
-        // 1. DYNAMIC STARTUP DELAY
+        // Dynamic Startup Delay
         if(start_delay_q) delay_d = delay_q + 1'b1;
         
         if((message_index_q == 0 ? delay_q[24] : delay_q[16]) && message_index_q != (MSG_INDEX+1) && (state_q != start_sccb)) begin
@@ -204,210 +157,85 @@ module camera_interface(
             delay_d = 0;
         end
         
-        // 2. I2C STATE MACHINE
         case(state_q) 
-            idle: if(delay_finish) begin
+            idle: begin
+                if(delay_finish) begin
                     state_d = start_sccb;
                     start_delay_d = 0;
-                  end else start_delay_d = 1;
+                end else start_delay_d = 1;
+            end
                   
             start_sccb: begin
-                    start = 1;
-                    wr_data = 8'h42;
-                    state_d = write_address;                        
-                  end
+                start = 1;
+                wr_data = 8'h42;
+                state_d = write_address;                        
+            end
                   
-            write_address: 
-                  if(ack==2'b11) begin 
+            write_address: begin
+                if(ack==2'b11) begin 
                     wr_data = message[message_index_q][15:8];
                     state_d = write_data;
-                  end else if(ack==2'b10) begin 
-                    stop = 1;
-                    start_delay_d = 1;
-                    state_d = delay;
-                  end
+                end else if(ack==2'b10) begin 
+                    stop = 1; start_delay_d = 1; state_d = delay; // NACK retry
+                end
+            end
                   
-            write_data: 
-                  if(ack==2'b11) begin 
+            write_data: begin
+                if(ack==2'b11) begin 
                     wr_data = message[message_index_q][7:0];
                     state_d = digest_loop;
-                  end else if(ack==2'b10) begin 
-                    stop = 1;
-                    start_delay_d = 1;
-                    state_d = delay;
-                  end
+                end else if(ack==2'b10) begin 
+                    stop = 1; start_delay_d = 1; state_d = delay;
+                end
+            end
                   
-            digest_loop: 
-                  if(ack==2'b11) begin
-                    stop = 1;
-                    start_delay_d = 1;
+            digest_loop: begin
+                if(ack==2'b11) begin
+                    stop = 1; start_delay_d = 1;
                     message_index_d = message_index_q + 1'b1;
                     state_d = delay;
-                  end else if(ack==2'b10) begin 
-                    stop = 1;
-                    start_delay_d = 1;
-                    state_d = delay;
-                  end
+                end else if(ack==2'b10) begin 
+                    stop = 1; start_delay_d = 1; state_d = delay;
+                end
+            end
                   
             delay: begin
-                    if(message_index_q == (MSG_INDEX+1) && delay_finish) begin 
-                        state_d = vsync_fedge;
-                        led_d = 4'b0110; 
-                    end else if(state==0 && delay_finish) state_d = start_sccb;
-                  end
+                if(message_index_q == (MSG_INDEX+1) && delay_finish) begin 
+                    state_d = vsync_fedge;
+                    led_d = 4'b0110; // I2C Success: LEDs 2 and 3 ON!
+                end else if(state_q==0 && delay_finish) begin 
+                    state_d = start_sccb;
+                end
+            end
                   
-            vsync_fedge: if(vsync_1==0 && vsync_2==1) state_d = byte1;
+            vsync_fedge: begin
+                if(vsync_1==0 && vsync_2==1) state_d = byte1;
+            end
             
-            byte1: if(pclk_1==1 && pclk_2==0 && href_1==1 && href_2==1) begin
-                        pixel_d[15:8] = cmos_db;
-                        state_d = byte2;
-                    end else if(vsync_1==1 && vsync_2==1) begin
-                        state_d = vsync_fedge;
-                    end
+            byte1: begin
+                if(pclk_1==1 && pclk_2==0 && href_1==1 && href_2==1) begin
+                    pixel_d[15:8] = cmos_db;
+                    state_d = byte2;
+                end else if(vsync_1==1 && vsync_2==1) begin
+                    state_d = vsync_fedge;
+                end
+            end
                     
-            byte2: if(pclk_1==1 && pclk_2==0 && href_1==1 && href_2==1) begin
-                        pixel_d[7:0] = cmos_db;
-                        state_d = fifo_write;
-                    end else if(vsync_1==1 && vsync_2==1) begin
-                        state_d = vsync_fedge;
-                    end
+            byte2: begin
+                if(pclk_1==1 && pclk_2==0 && href_1==1 && href_2==1) begin
+                    pixel_d[7:0] = cmos_db;
+                    state_d = fifo_write;
+                end else if(vsync_1==1 && vsync_2==1) begin
+                    state_d = vsync_fedge;
+                end
+            end
                     
             fifo_write: begin
-                        wr_en = 1;
-                        state_d = byte1;
-                        if(full) led_d = 4'b1001;
-                    end
+                wr_en_d = 1;
+                state_d = byte1;
+            end
                     
             default: state_d = idle;
         endcase
     end
-        
-        case(sccb_state_q)
-            wait_init: if(state_q == byte1) begin
-                        sccb_state_d = sccb_idle;
-                        addr_d = 0;
-                        data_d = 0;
-                        brightness_d = 8'h00; 
-                        contrast_d = 8'h40;
-                       end
-            sccb_idle: if(state==0) begin
-                        if(key0_tick) begin
-                            brightness_d = (brightness_q[7]==1) ? brightness_q-1 : brightness_q+1;
-                            if(brightness_q==8'h80) brightness_d = 0;
-                            start = 1;
-                            wr_data = 8'h42;
-                            addr_d = 8'h55;
-                            data_d = brightness_d;
-                            sccb_state_d = sccb_address;
-                            led_d = 0;
-                        end
-                        if(key1_tick) begin
-                            brightness_d = (brightness_q[7]==1) ? brightness_q+1 : brightness_q-1;
-                            if(brightness_q==0) brightness_d = 8'h80;
-                            start = 1;
-                            wr_data = 8'h42; 
-                            addr_d = 8'h55;
-                            data_d = brightness_d;
-                            sccb_state_d = sccb_address;
-                            led_d = 0;
-                        end else if(key2_tick) begin
-                            contrast_d = contrast_q + 1;
-                            start = 1;
-                            wr_data = 8'h42;
-                            addr_d = 8'h56;
-                            data_d = contrast_d;
-                            sccb_state_d = sccb_address;
-                            led_d = 0;
-                        end else if(key3_tick) begin
-                            contrast_d = contrast_q - 1;
-                            start = 1;
-                            wr_data = 8'h42;
-                            addr_d = 8'h56;
-                            data_d = contrast_d;
-                            sccb_state_d = sccb_address;
-                            led_d = 0;
-                        end
-                       end
-            sccb_address: if(ack==2'b11) begin 
-                        wr_data = addr_q;
-                        sccb_state_d = sccb_data;
-                       end
-            sccb_data: if(ack==2'b11) begin 
-                        wr_data = data_q;
-                        sccb_state_d = sccb_stop;
-                       end
-            sccb_stop: if(ack==2'b11) begin
-                        stop = 1;
-                        sccb_state_d = sccb_idle;
-                        led_d = 4'b1001;
-                       end
-            default: sccb_state_d = wait_init;
-        endcase
-    end
-
-    assign led = led_q;
-     
-    i2c_top #(.freq(100_000)) m0 (
-        .clk(clk_100),
-        .rst_n(rst_n),
-        .start(start),
-        .stop(stop),
-        .wr_data(wr_data),
-        .rd_tick(rd_tick),
-        .ack(ack),
-        .rd_data(rd_data), 
-        .scl(cmos_scl),
-        .sda(cmos_sda),
-        .state(state)
-    ); 
-     
-    // Bypass the 24MHz PLL to save hardware resources! 
-    // Feed the raw 27MHz clock directly to the camera.
-    assign cmos_xclk = clk;
-     
-    asyn_fifo #(.DATA_WIDTH(16), .FIFO_DEPTH_WIDTH(10)) m2 (
-        .rst_n(rst_n),
-        .clk_write(clk_100),
-        .clk_read(clk_100),
-        .write(wr_en),
-        .read(rd_en), 
-        .data_write(pixel_q),
-        .data_read(dout),
-        .full(full),
-        .empty(),
-        .data_count_r(data_count_r)
-    );
-    
-    debounce_explicit m3 (
-        .clk(clk_100),
-        .rst_n(rst_n),
-        .sw({!key[0]}),
-        .db_level(),
-        .db_tick(key0_tick)
-    );
-     
-    debounce_explicit m4 (
-        .clk(clk_100),
-        .rst_n(rst_n),
-        .sw({!key[1]}),
-        .db_level(),
-        .db_tick(key1_tick)
-    );
-     
-    debounce_explicit m5 (
-        .clk(clk_100),
-        .rst_n(rst_n),
-        .sw({!key[2]}),
-        .db_level(),
-        .db_tick(key2_tick)
-    );
-     
-    debounce_explicit m6 (
-        .clk(clk_100),
-        .rst_n(rst_n),
-        .sw({!key[3]}),
-        .db_level(),
-        .db_tick(key3_tick)
-    );
-    
 endmodule
