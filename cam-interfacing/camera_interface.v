@@ -67,8 +67,8 @@ module camera_interface (
         .wr_data(wr_data),
         .ack    (ack),
         .sda    (cmos_sda),
-        .scl    (cmos_scl),
-        .idle   ()
+        .scl    (cmos_scl)
+        
     );
 
     // =========================================================================
