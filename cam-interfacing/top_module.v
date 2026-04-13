@@ -50,6 +50,7 @@ module top_module (
     // ============================================
     wire [15:0] pixel_data;
     wire        cam_rd_en;
+    wire hdmi_rd_en_unused;
     wire [9:0]  fifo_count;
     wire [3:0]  cam_led_status;
 
@@ -85,8 +86,8 @@ module top_module (
      // 135MHz serial clock (exactly 5x 27MHz)
         .rst_n(sys_reset_n),
         .rgb_in(pixel_data),
-        .wr_en(cam_rd_en),            
-        .rd_en(cam_rd_en),       
+        .wr_en(cam_rd_en),            // BUG 2 fix
+        .rd_en(hdmi_rd_en_unused), 
         .hdmi_hs(hsync), 
         .hdmi_vs(vsync),
         .hdmi_de(video_active),
