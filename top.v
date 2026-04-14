@@ -28,7 +28,7 @@ module top(
     inout  wire [1:0]  IO_psram_rwds,
     output wire [1:0]  O_psram_reset_n,
     inout  wire [15:0] IO_psram_dq,
-    output wire [1:0]  O_psram_cs_n,
+    output wire [1:0]  O_psram_cs_n
 
     // Debug LEDs
     //output wire [2:0] status_leds,
