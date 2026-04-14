@@ -124,7 +124,7 @@ module top(
     wire [3:0] data_mask_0, data_mask_1;
 
     assign addr1 = 0; assign wr_data1 = 0; assign cmd_1 = 0;
-    assign cmd_en_1 = 1; assign data_mask_1 = 0;
+    assign cmd_en_1 = 0; assign data_mask_1 = 0;
 
     Video_frame_buffer frame_buffer (
         .clk(sys_clk), 
