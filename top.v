@@ -31,10 +31,10 @@ module top(
     output wire [1:0]  O_psram_cs_n,
 
     // Debug LEDs
-    output wire [2:0] status_leds,
-    output wire       debug_led,
-    output wire       led_out,
-    output wire       led_out1
+    //output wire [2:0] status_leds,
+   //output wire       debug_led,
+    //output wire       led_out,
+    //output wire       led_out1
 );
 
     // =========================================================
@@ -66,8 +66,8 @@ module top(
         .CLKOUT(clk_135M), .LOCK(psram_lock)
     );
     wire system_ready = hdmi_lock & psram_lock;
-    assign debug_led = system_ready;
-    assign status_leds = 3'b111;
+    //assign debug_led = system_ready;
+    //assign status_leds = 3'b111;
 
     // =========================================================
     // 2. CAMERA INITIALIZATION
@@ -84,7 +84,7 @@ module top(
         .cam_pwdn(cam_pwdn),
         .config_done(config_done)
     );
-    assign led_out1 = config_done;
+    //assign led_out1 = config_done;
 
     // =========================================================
     // 3. PSRAM FRAME BUFFER PIPELINE
