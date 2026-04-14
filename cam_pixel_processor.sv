@@ -261,10 +261,10 @@ module CamPixelProcessor
                         state <= `WRAP_SIM(#1) WRITE_ROW_START;
                     end else if (h_ref) begin
                         case ({col_counter[0], pixel_half})
-                            1: input_pixel[7:0] <= `WRAP_SIM(#1) cam_data;
-                            0: input_pixel[15:8] <= `WRAP_SIM(#1) cam_data;
-                            3: input_pixel[23:16] <= `WRAP_SIM(#1) cam_data;
-                            2: input_pixel[31:24] <= `WRAP_SIM(#1) cam_data;
+                            0: input_pixel[15:8] <= cam_data;   // byte0 → high byte ✅
+                            1: input_pixel[7:0]  <= cam_data;   // byte1 → low byte  ✅
+                            2: input_pixel[31:24] <= cam_data;  // pixel2 byte0 → high byte
+                            3: input_pixel[23:16] <= cam_data;  // pixel2 byte1 → low byte
                         endcase
                         pixel_half <= `WRAP_SIM(#1) ~pixel_half;
 
