@@ -3,9 +3,9 @@
 `include "camera_control_defs.vh"
 `include "psram_utils.vh"
 `else
-`include "../timescale.v"
-`include "../camera_control_defs.vh"
-`include "../psram_utils.vh"
+`include "timescale.v"
+`include "camera_control_defs.vh"
+`include "psram_utils.vh"
 `endif
 
 `ifdef __ICARUS__
