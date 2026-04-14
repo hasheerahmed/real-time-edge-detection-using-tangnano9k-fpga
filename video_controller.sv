@@ -194,16 +194,10 @@ FrameUploader #(
                 );
 
 FrameDownloader #(
-    .FRAME_WIDTH(OUTPUT_IMAGE_WIDTH), 
-    .FRAME_HEIGHT(OUTPUT_IMAGE_HEIGHT),
-    .ORIG_FRAME_WIDTH(INPUT_IMAGE_WIDTH), 
-    .ORIG_FRAME_HEIGHT(INPUT_IMAGE_HEIGHT),
-    .MEMORY_BURST(MEMORY_BURST),
-    .ENABLE_RESIZE(ENABLE_OUTPUT_RESIZE)
-`ifdef __ICARUS__
-    , .LOG_LEVEL(LOG_LEVEL)
-`endif
-) frame_downloader(
+        .FRAME_WIDTH(OUTPUT_IMAGE_WIDTH),
+        .FRAME_HEIGHT(OUTPUT_IMAGE_HEIGHT),
+        .MEMORY_BURST(MEMORY_BURST)
+    ) frame_downloader(
     .clk(clk),
     .reset_n(rst_n),
     .start(start_downloading),
