@@ -1,37 +1,20 @@
-/*
- *  SVO - Simple Video Out FPGA Core
- *
- *  Copyright (C) 2014  Clifford Wolf <clifford@clifford.at>
- *  
- *  Permission to use, copy, modify, and/or distribute this software for any
- *  purpose with or without fee is hereby granted, provided that the above
- *  copyright notice and this permission notice appear in all copies.
- *  
- *  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- *  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- *  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- *  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- *  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- *  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- *  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- */
-
-
 `timescale 1ns / 1ps
 `include "svo_defines.vh"
-
 
 module svo_hdmi(
   input clk,
   input resetn,
-
 
   // video clocks
   input clk_pixel,
   input clk_5x_pixel,
   input locked,
 
+  // --- NEW: AXI Stream inputs from the camera's PSRAM buffer ---
+  input         in_axis_tvalid,
+  output        in_axis_tready,
+  input  [23:0] in_axis_tdata,
+  input  [0:0]  in_axis_tuser,
 
   // output signals
   output       tmds_clk_n,
@@ -39,133 +22,33 @@ module svo_hdmi(
   output [2:0] tmds_d_n,
   output [2:0] tmds_d_p
 );
-  parameter SVO_MODE             =   "640x480V";
-  parameter SVO_FRAMERATE        =   60;
-  parameter SVO_BITS_PER_PIXEL   =   24;
-  parameter SVO_BITS_PER_RED     =    8;
-  parameter SVO_BITS_PER_GREEN   =    8;
-  parameter SVO_BITS_PER_BLUE    =    8;
-  parameter SVO_BITS_PER_ALPHA   =    0;
 
-
-  localparam [SVO_BITS_PER_PIXEL-1:0] white_pixval = ~0;
-
-
-  wire vdma_tvalid;
-  wire vdma_tready;
-  wire [SVO_BITS_PER_PIXEL-1:0] vdma_tdata;
-  wire [0:0] vdma_tuser;
-
-
-  wire video_tvalid;
-  wire video_tready;
-  wire [SVO_BITS_PER_PIXEL-1:0] video_tdata;
-  wire [0:0] video_tuser;
-
-
-  wire term_out_tvalid;
-  // wire term_out_tready;
-  wire [1:0] term_out_tdata;
-  wire [0:0] term_out_tuser;
-
-
-  wire video_enc_tvalid, video_enc_tready;
-  wire [SVO_BITS_PER_PIXEL-1:0] video_enc_tdata;
+  wire video_enc_tvalid;
+  wire video_enc_tready;
+  wire [23:0] video_enc_tdata;
   wire [3:0] video_enc_tuser;
 
+  wire clk_pixel_resetn = resetn & locked;
 
-  wire [2:0] tmds_d;
-  wire [2:0] tmds_serdes_shift1;
-  wire [2:0] tmds_serdes_shift2;
-  wire [2:0] tmds_d0, tmds_d1, tmds_d2, tmds_d3, tmds_d4;
-  wire [2:0] tmds_d5, tmds_d6, tmds_d7, tmds_d8, tmds_d9;
-
-
-  reg [3:0] locked_clk_q;
-  reg [3:0] resetn_clk_pixel_q;
-
-
-  always @(posedge clk)
-    locked_clk_q <= {locked_clk_q, locked};
-
-
-  always @(posedge clk_pixel)
-    resetn_clk_pixel_q <= {resetn_clk_pixel_q, resetn};
-
-
-  wire clk_resetn = resetn && locked_clk_q[3];
-  wire clk_pixel_resetn = locked && resetn_clk_pixel_q[3];
-
-
-  svo_tcard #( `SVO_PASS_PARAMS ) svo_tcard (
-    .clk(clk_pixel),
-    .resetn(resetn),
-
-
-    .out_axis_tvalid(vdma_tvalid),
-    .out_axis_tready(vdma_tready),
-    .out_axis_tdata(vdma_tdata),
-    .out_axis_tuser(vdma_tuser)
+  // The HDMI Encoder translates the AXI Stream into TMDS symbols
+  svo_enc #(
+      `SVO_PASS_PARAMS
+  ) svo_enc_inst (
+      .clk(clk_pixel),
+      .resetn(clk_pixel_resetn),
+      .in_axis_tvalid(in_axis_tvalid),
+      .in_axis_tready(in_axis_tready),
+      .in_axis_tdata(in_axis_tdata),
+      .in_axis_tuser(in_axis_tuser),
+      .out_axis_tvalid(video_enc_tvalid),
+      .out_axis_tready(video_enc_tready),
+      .out_axis_tdata(video_enc_tdata),
+      .out_axis_tuser(video_enc_tuser)
   );
-
-
-  svo_term #( `SVO_PASS_PARAMS ) svo_term (
-    .clk(clk),
-    .oclk(clk_pixel),
-    .resetn(clk_resetn),
-
-
-    .out_axis_tvalid(term_out_tvalid),
-    .out_axis_tready(term_out_tready),
-    .out_axis_tdata(term_out_tdata),
-    .out_axis_tuser(term_out_tuser)
-  );
-
-
-  svo_overlay #( `SVO_PASS_PARAMS ) svo_overlay (
-    .clk(clk_pixel),
-    .resetn(clk_pixel_resetn),
-    .enable(1'b1),
-
-
-    .in_axis_tvalid(vdma_tvalid),
-    .in_axis_tready(vdma_tready),
-    .in_axis_tdata(vdma_tdata),
-    .in_axis_tuser(vdma_tuser),
-
-
-    .over_axis_tvalid(term_out_tvalid),
-    .over_axis_tready(term_out_tready),
-    .over_axis_tdata(white_pixval),
-    .over_axis_tuser({term_out_tdata == 2'b10, term_out_tuser}),
-
-
-    .out_axis_tvalid(video_tvalid),
-    .out_axis_tready(video_tready),
-    .out_axis_tdata(video_tdata),
-    .out_axis_tuser(video_tuser)
-  );
-
-
-  svo_enc #( `SVO_PASS_PARAMS ) svo_enc (
-    .clk(clk_pixel),
-    .resetn(clk_pixel_resetn),
-
-
-    .in_axis_tvalid(video_tvalid),
-    .in_axis_tready(video_tready),
-    .in_axis_tdata(video_tdata),
-    .in_axis_tuser(video_tuser),
-
-
-    .out_axis_tvalid(video_enc_tvalid),
-    .out_axis_tready(video_enc_tready),
-    .out_axis_tdata(video_enc_tdata),
-    .out_axis_tuser(video_enc_tuser)
-  );
-
 
   assign video_enc_tready = 1;
+
+  // ... KEEP YOUR EXISTING svo_tmds and OSER10 CODE BELOW THIS LINE ...
 
 
   svo_tmds svo_tmds_0 (
