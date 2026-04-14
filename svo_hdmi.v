@@ -1,36 +1,59 @@
 `timescale 1ns / 1ps
 `include "svo_defines.vh"
 
-module svo_hdmi(
-  input clk,
-  input resetn,
+module svo_hdmi #(
+    `SVO_DEFAULT_PARAMS
+) (
+    input clk,
+    input resetn,
 
-  // video clocks
-  input clk_pixel,
-  input clk_5x_pixel,
-  input locked,
+    // video clocks
+    input clk_pixel,
+    input clk_5x_pixel,
+    input locked,
 
-  // --- NEW: AXI Stream inputs from the camera's PSRAM buffer ---
-  input         in_axis_tvalid,
-  output        in_axis_tready,
-  input  [23:0] in_axis_tdata,
-  input  [0:0]  in_axis_tuser,
+    // --- NEW: AXI Stream inputs from the camera's PSRAM buffer ---
+    input         in_axis_tvalid,
+    output        in_axis_tready,
+    input  [23:0] in_axis_tdata,
+    input  [0:0]  in_axis_tuser,
 
-  // output signals
-  output       tmds_clk_n,
-  output       tmds_clk_p,
-  output [2:0] tmds_d_n,
-  output [2:0] tmds_d_p
+    // output signals
+    output       tmds_clk_n,
+    output       tmds_clk_p,
+    output [2:0] tmds_d_n,
+    output [2:0] tmds_d_p
 );
 
-  wire video_enc_tvalid;
-  wire video_enc_tready;
-  wire [23:0] video_enc_tdata;
-  wire [3:0] video_enc_tuser;
+    wire video_enc_tvalid;
+    wire video_enc_tready;
+    wire [23:0] video_enc_tdata;
+    wire [3:0] video_enc_tuser;
 
-  wire clk_pixel_resetn = resetn & locked;
+    wire clk_pixel_resetn = resetn & locked;
 
-  // The HDMI Encoder translates the AXI Stream into TMDS symbols
+    // The HDMI Encoder translates the AXI Stream into TMDS symbols
+    svo_enc #(
+        `SVO_PASS_PARAMS
+    ) svo_enc_inst (
+        .clk(clk_pixel),
+        .resetn(clk_pixel_resetn),
+        .in_axis_tvalid(in_axis_tvalid),
+        .in_axis_tready(in_axis_tready),
+        .in_axis_tdata(in_axis_tdata),
+        .in_axis_tuser(in_axis_tuser),
+        .out_axis_tvalid(video_enc_tvalid),
+        .out_axis_tready(video_enc_tready),
+        .out_axis_tdata(video_enc_tdata),
+        .out_axis_tuser(video_enc_tuser)
+    );
+
+    assign video_enc_tready = 1;
+
+    wire [2:0] tmds_d0, tmds_d1, tmds_d2, tmds_d3, tmds_d4;
+    wire [2:0] tmds_d5, tmds_d6, tmds_d7, tmds_d8, tmds_d9;
+
+    // ... KEEP YOUR EXISTING svo_tmds AND OSER10 CODE BELOW THIS LINE ...
   svo_enc #(
       `SVO_PASS_PARAMS
   ) svo_enc_inst (
