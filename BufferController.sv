@@ -2,8 +2,8 @@
 `include "timescale.v"
 `include "camera_control_defs.vh"
 `else
-`include "../timescale.v"
-`include "../camera_control_defs.vh"
+`include "timescale.v"
+`include "camera_control_defs.vh"
 `endif
 
 `ifdef __ICARUS__
