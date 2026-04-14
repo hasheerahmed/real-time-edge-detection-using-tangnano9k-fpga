@@ -136,7 +136,7 @@ module CamPixelProcessor
     wire [31:0] pixel_data_a, pixel_data_b;
     reg write_buffer_id = 1'b0;
 
-    assign pixel_data = (write_buffer_id == 1'b0) ? pixel_data_b : pixel_data_a;
+   assign pixel_data = (write_buffer_id == 1'b0) ? pixel_data_a : pixel_data_b;
 
     reg clk_cam_en_a;
     reg clk_cam_en_b;
