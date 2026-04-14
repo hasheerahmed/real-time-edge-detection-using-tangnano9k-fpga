@@ -196,7 +196,7 @@ module top(
     wire [23:0] rgb888 = {r5, r5[4:2], g6, g6[5:4], b5, b5[4:2]};
 // Actually for unbiased: {r5,r5[4:2], g6,g6[5:4], b5,b5[4:2]}
 // is already correct. If colors look warm/off, try:
-    wire [23:0] rgb888 = {r5,r5[4:2], g6,g6[5:3], b5,b5[4:2]};
+    //wire [23:0] rgb888 = {r5,r5[4:2], g6,g6[5:3], b5,b5[4:2]};
 // (extends green with 3 MSBs → 9 bits, trim to 8 is cleaner)
 
     // Keep track of the first pixel of the frame
