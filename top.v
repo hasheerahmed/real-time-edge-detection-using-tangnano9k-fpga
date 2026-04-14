@@ -55,17 +55,16 @@ module top(
         .resetn(hdmi_lock)
     );
 
-    // PSRAM Clock: 135 MHz (Generated natively to avoid missing IP files)
+    /// PSRAM Clock: 135 MHz (Corrected VCO parameters)
     wire clk_135M, psram_lock;
     rPLL #(
-        .FCLKIN("27"), .IDIV_SEL(0), .FBDIV_SEL(4), .ODIV_SEL(4)
+        .FCLKIN("27"), .IDIV_SEL(0), .FBDIV_SEL(19), .ODIV_SEL(4)
     ) pll_psram (
         .CLKIN(sys_clk), .CLKFB(1'b0), .RESET(1'b0), .RESET_P(1'b0),
         .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0),
         .DUTYDA(4'b0), .FDLY(4'b0),
         .CLKOUT(clk_135M), .LOCK(psram_lock)
     );
-
     wire system_ready = hdmi_lock & psram_lock;
     assign debug_led = system_ready;
     assign status_leds = 3'b111;
