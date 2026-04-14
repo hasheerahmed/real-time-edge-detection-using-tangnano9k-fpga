@@ -12,7 +12,7 @@
 `include "svlogger.sv"
 `endif
 
-`include "psram_utils.vh"
+
 `include "color_utilities.vh"
 
 package FrameUploaderTypes;
