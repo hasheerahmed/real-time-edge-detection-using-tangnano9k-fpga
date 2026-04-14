@@ -78,7 +78,7 @@ module top(
         .sys_rst_n(sys_rst_n),
         .master_scl(master_scl), 
         .master_sda(master_sda),
-        .led_out(led_out), 
+        .led_out(), 
         .cam_reset(cam_reset),
         .cam_clk(cam_clk), 
         .cam_pwdn(cam_pwdn),
