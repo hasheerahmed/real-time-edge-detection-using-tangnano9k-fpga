@@ -83,7 +83,7 @@ module FrameDownloader
         .ceb(cache_out_en), 
         .resetb(~reset_n), 
         .oce(1'b1), 
-        .ada(read_counter[3:0]),   // <--- FIXED TO 4 BITS
+        .ada(read_counter[2:0]),   // <--- FIXED TO 3 BITS
         .din(mem_word), 
         .adb(cache_addr[3:0])
     );
