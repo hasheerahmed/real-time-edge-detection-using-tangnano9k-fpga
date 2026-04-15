@@ -74,7 +74,7 @@ module CameraControl_TOP (
     assign reg_addr = (tx_en) ? wr_addr : rd_addr;
 
     // I2C Master core
-    i2c_master_top i2c_master(
+    i2C_MASTER_Control i2c_master(
         .wb_clk_i(sys_clk),
         .wb_rst_i(1'b0),
         .arst_i(sys_rst_n),
