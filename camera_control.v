@@ -74,26 +74,20 @@ module CameraControl_TOP (
     assign reg_addr = (tx_en) ? wr_addr : rd_addr;
 
     // I2C Master core
-    i2C_MASTER_Control i2c_master(
-        .wb_clk_i(sys_clk),
-        .wb_rst_i(1'b0),
-        .arst_i(sys_rst_n),
-        .wb_dat_i(wr_data),
-        .wb_adr_i(reg_addr),
-        .wb_we_i(tx_en),
-        .wb_stb_i(1'b1),
-        .scl_padoen_o(scl_o_oen),
-        .scl_pad_i(master_scl),
-        .scl_pad_o(scl_o),
-        .sda_padoen_o(sda_o_oen),
-        .sda_pad_i(master_sda),
-        .sda_pad_o(sda_o),
-        .wb_cyc_i(cyc),
-        .wb_dat_o(rd_data),
-        .wb_ack_o(cmd_ack),
-        .wb_inta_o()
+    // Gowin Encrypted I2C Master Core
+    I2C_MASTER_Control i2c_master (
+        .I_CLK(sys_clk),
+        .I_RESETN(sys_rst_n),
+        .I_TX_EN(tx_en),
+        .I_WADDR(wr_addr),
+        .I_WDATA(wr_data),
+        .I_RX_EN(rx_en),
+        .I_RADDR(rd_addr),
+        .O_RDATA(rd_data),
+        .O_IIC_INT(cmd_ack),
+        .SCL(master_scl),
+        .SDA(master_sda)
     );
-
     // I2C Control FSM
     i2c_control_fsm i2c_controller(
         .clk(sys_clk), 
