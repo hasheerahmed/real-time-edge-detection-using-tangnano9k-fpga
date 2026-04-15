@@ -18,25 +18,43 @@ module CDC_Word_Synchronizer #(
     input receiving_ready
 );
 
-    // Simple FIFO bypass for the Tang Nano 9K implementation
-    // to pass the 2-bit command data across the clock domain safely.
-    reg [WORD_WIDTH-1:0] data_reg;
-    reg valid_reg;
+    // Stage 1: Register on the sending clock domain
+    reg [WORD_WIDTH-1:0] tx_data;
+    reg tx_valid;
 
     always @(posedge sending_clock) begin
         if (sending_clear) begin
-            data_reg <= 0;
-            valid_reg <= 0;
-        end else if (sending_valid) begin
-            data_reg <= sending_data;
-            valid_reg <= 1'b1;
+            tx_data <= 0;
+            tx_valid <= 0;
         end else begin
-            valid_reg <= 1'b0;
+            tx_data <= sending_data;
+            tx_valid <= sending_valid;
         end
     end
 
-    assign receiving_data = data_reg;
-    assign receiving_valid = valid_reg;
+    // Stage 2 & 3: 2-FF Synchronizer on the receiving clock domain
+    reg [WORD_WIDTH-1:0] rx_data_meta, rx_data_sync;
+    reg rx_valid_meta, rx_valid_sync;
+
+    always @(posedge receiving_clock) begin
+        if (receiving_clear) begin
+            rx_data_meta <= 0;
+            rx_data_sync <= 0;
+            rx_valid_meta <= 0;
+            rx_valid_sync <= 0;
+        end else begin
+            // First Flip Flop (catches metastability)
+            rx_data_meta <= tx_data;
+            rx_valid_meta <= tx_valid;
+            
+            // Second Flip Flop (stabilized output)
+            rx_data_sync <= rx_data_meta;
+            rx_valid_sync <= rx_valid_meta;
+        end
+    end
+
+    assign receiving_data = rx_data_sync;
+    assign receiving_valid = rx_valid_sync;
     assign sending_ready = 1'b1;
 
 endmodule
