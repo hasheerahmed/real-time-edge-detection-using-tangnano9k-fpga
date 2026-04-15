@@ -68,10 +68,7 @@ module CameraControl_TOP (
     wire [7:0] rom_reg_addr;
     wire [7:0] rom_reg_val;
 
-    assign master_scl = scl_o_oen ? 1'bZ : scl_o;
-    assign master_sda = sda_o_oen ? 1'bZ : sda_o;
-    assign cyc = tx_en | rx_en;
-    assign reg_addr = (tx_en) ? wr_addr : rd_addr;
+   
 
     // I2C Master core
     // Gowin Encrypted I2C Master Core
