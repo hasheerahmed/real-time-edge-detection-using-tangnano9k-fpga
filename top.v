@@ -194,7 +194,7 @@ module top(
             start_of_frame_q <= 0;
         end else begin
             tvalid_q <= fifo_rd_en;
-            rgb888_q <= {r5, r5[4:2], g6, g6[5:4], b5, b5[4:2]}; 
+            rgb888_q <= {b5, b5[4:2], g6, g6[5:4], r5, r5[4:2]};
             start_of_frame_q <= lcd_queue_data_out[16]; // Grab the secret bit 16 flag!
         end
     end
