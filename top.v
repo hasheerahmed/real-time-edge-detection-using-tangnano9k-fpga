@@ -189,15 +189,24 @@ module top(
     end
 
     // Convert 16-bit RGB565 to 24-bit RGB888
+   // B. Format the data into an AXI Stream for the HDMI Encoder
     wire [4:0] r5 = lcd_queue_data_out[15:11];
     wire [5:0] g6 = lcd_queue_data_out[10:5];
     wire [4:0] b5 = lcd_queue_data_out[4:0];
-   // FIX — use MSB-replication (standard "bit-stretching")
-    wire [23:0] rgb888 = {r5, r5[4:2], g6, g6[5:4], b5, b5[4:2]};
-// Actually for unbiased: {r5,r5[4:2], g6,g6[5:4], b5,b5[4:2]}
-// is already correct. If colors look warm/off, try:
-    //wire [23:0] rgb888 = {r5,r5[4:2], g6,g6[5:3], b5,b5[4:2]};
-// (extends green with 3 MSBs → 9 bits, trim to 8 is cleaner)
+
+    reg tvalid_q;
+    reg [23:0] rgb888_q; // New register to hold the colors
+
+    always @(posedge clk_25M) begin
+        if (!sys_rst_n) begin
+            tvalid_q <= 0;
+            rgb888_q <= 24'd0;
+        end else begin
+            tvalid_q <= fifo_rd_en;
+            // Capture the color data on the exact same clock tick as tvalid
+            rgb888_q <= {r5, r5[4:2], g6, g6[5:4], b5, b5[4:2]}; 
+        end
+    end
 
     // Keep track of the first pixel of the frame
     reg [18:0] pixel_cnt;
@@ -219,9 +228,10 @@ module top(
         .locked(hdmi_lock),
 
         // AXI Interface
+        // AXI Interface
         .in_axis_tvalid(tvalid_q),
         .in_axis_tready(in_axis_tready),
-        .in_axis_tdata(rgb888),
+        .in_axis_tdata(rgb888_q),  // <-- CHANGE THIS LINE
         .in_axis_tuser(start_of_frame),
 
         // Physical HDMI Pins
