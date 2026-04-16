@@ -182,7 +182,7 @@ module top(
     );
 
     // B. Format the data into an AXI Stream for the HDMI Encoder
-    reg tvalid_q;
+    
     always @(posedge clk_25M) begin
         if (!sys_rst_n) tvalid_q <= 0;
         else tvalid_q <= fifo_rd_en;
