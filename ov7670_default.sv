@@ -7,7 +7,7 @@ module ov7670_default(
     output reg [15:0] dout
 )/*synthesis syn_romstyle="block_rom"*/;
 
-    function reg [15:0] make_setting_value(input reg [7:0] reg_addr, input reg [7:0] reg_value);
+    function [15:0] make_setting_value(input [7:0] reg_addr, input [7:0] reg_value);
         make_setting_value = { reg_addr, reg_value };
     endfunction
 
