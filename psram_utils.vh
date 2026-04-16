@@ -3,7 +3,7 @@
 
 package PSRAM_Utilities;
 
-    function reg [5:0] burst_delay(input int burst);
+    function [5:0] burst_delay(input int burst);
         case (burst)
              16: burst_delay = 6'd15;
              32: burst_delay = 6'd19;
@@ -13,7 +13,7 @@ package PSRAM_Utilities;
         endcase
     endfunction
 
-    function reg [5:0] burst_cycles(input int burst);
+    function [5:0] burst_cycles(input int burst);
         case (burst)
              16: burst_cycles = 6'd4;
              32: burst_cycles = 6'd8;
