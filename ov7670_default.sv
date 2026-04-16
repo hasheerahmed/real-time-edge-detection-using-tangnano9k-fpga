@@ -182,7 +182,13 @@ module ov7670_default(
             74: dout <= `WRAP_SIM(#1) make_setting_value(`OV7670_REG_OFON, 8'h2A);
             75: dout <= `WRAP_SIM(#1) make_setting_value(`OV7670_REG_BRIGHT, 8'h00);
             76: dout <= `WRAP_SIM(#1) make_setting_value(`OV7670_REG_CONTRAS, 8'h40);
-            77: dout <= `WRAP_SIM(#1) make_setting_value(`OV7670_REG_CONTRAS_CENTER, 8'h80); // 0x40?
+            77: dout <= `WRAP_SIM(#1) make_setting_value(`OV7670_REG_CONTRAS_CENTER, 8'h80);
+
+            // --- FORCE TEST PATTERNS OFF ---
+            78: dout <= 16'h12_04; // COM7: RGB mode, Sensor Color Bar OFF
+            79: dout <= 16'h42_00; // COM17: DSP Color Bar OFF
+            80: dout <= 16'h70_3A; // SCALING_XSC: Test Pattern OFF
+            81: dout <= 16'h71_35; // SCALING_YSC: Test Pattern OFF
 
             default: dout <= `WRAP_SIM(#1) 16'hFF_FF;         //mark end of ROM
         endcase
