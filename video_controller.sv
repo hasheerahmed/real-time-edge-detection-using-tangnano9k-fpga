@@ -19,8 +19,8 @@ module VideoController
     parameter int MEMORY_BURST = 32,
     parameter int INPUT_IMAGE_WIDTH = 640,
     parameter int INPUT_IMAGE_HEIGHT = 480,
-    parameter int OUTPUT_IMAGE_WIDTH = 480,
-    parameter int OUTPUT_IMAGE_HEIGHT = 272,
+    parameter int OUTPUT_IMAGE_WIDTH = 640,
+    parameter int OUTPUT_IMAGE_HEIGHT = 480,
     parameter MEMORY_INITIAL_DELAY = 'd152,
     parameter int ENABLE_OUTPUT_RESIZE = 0,
     parameter int DEBUG_BUFFER_INDEX = -1
