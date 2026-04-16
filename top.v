@@ -190,21 +190,43 @@ module top(
 
     // Convert 16-bit RGB565 to 24-bit RGB888
    // B. Format the data into an AXI Stream for the HDMI Encoder
+   // B. Format the data into an AXI Stream for the HDMI Encoder
     wire [4:0] r5 = lcd_queue_data_out[15:11];
     wire [5:0] g6 = lcd_queue_data_out[10:5];
     wire [4:0] b5 = lcd_queue_data_out[4:0];
 
     reg tvalid_q;
-    reg [23:0] rgb888_q; // New register to hold the colors
+    reg [23:0] rgb888_q; 
+    reg start_of_frame_q; // New register for the frame sync flag
 
     always @(posedge clk_25M) begin
         if (!sys_rst_n) begin
             tvalid_q <= 0;
             rgb888_q <= 24'd0;
+            start_of_frame_q <= 0;
         end else begin
             tvalid_q <= fifo_rd_en;
-            // Capture the color data on the exact same clock tick as tvalid
             rgb888_q <= {r5, r5[4:2], g6, g6[5:4], b5, b5[4:2]}; 
+            start_of_frame_q <= lcd_queue_data_out[16]; // Grab the secret bit 16 flag!
+        end
+    end// B. Format the data into an AXI Stream for the HDMI Encoder
+    wire [4:0] r5 = lcd_queue_data_out[15:11];
+    wire [5:0] g6 = lcd_queue_data_out[10:5];
+    wire [4:0] b5 = lcd_queue_data_out[4:0];
+
+    reg tvalid_q;
+    reg [23:0] rgb888_q; 
+    reg start_of_frame_q; // New register for the frame sync flag
+
+    always @(posedge clk_25M) begin
+        if (!sys_rst_n) begin
+            tvalid_q <= 0;
+            rgb888_q <= 24'd0;
+            start_of_frame_q <= 0;
+        end else begin
+            tvalid_q <= fifo_rd_en;
+            rgb888_q <= {r5, r5[4:2], g6, g6[5:4], b5, b5[4:2]}; 
+            start_of_frame_q <= lcd_queue_data_out[16]; // Grab the secret bit 16 flag!
         end
     end
 
