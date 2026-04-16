@@ -28,13 +28,13 @@ module top(
     inout  wire [1:0]  IO_psram_rwds,
     output wire [1:0]  O_psram_reset_n,
     inout  wire [15:0] IO_psram_dq,
-    output wire [1:0]  O_psram_cs_n
+    output wire [1:0]  O_psram_cs_n,
 
-    // Debug LEDs
-    //output wire [2:0] status_leds,
-   //output wire       debug_led,
-    //output wire       led_out,
-    //output wire       led_out1
+    // Debug LEDs (UNCOMMENTED!)
+    output wire [2:0] status_leds,
+    output wire       debug_led,
+    output wire       led_out,
+    output wire       led_out1
 );
 
     // =========================================================
@@ -66,8 +66,6 @@ module top(
         .CLKOUT(clk_135M), .LOCK(psram_lock)
     );
     wire system_ready = hdmi_lock & psram_lock;
-    //assign debug_led = system_ready;
-    //assign status_leds = 3'b111;
 
     // =========================================================
     // 2. CAMERA INITIALIZATION
@@ -84,7 +82,6 @@ module top(
         .cam_pwdn(cam_pwdn),
         .config_done(config_done)
     );
-    //assign led_out1 = config_done;
 
     // =========================================================
     // 3. PSRAM FRAME BUFFER PIPELINE
@@ -182,34 +179,6 @@ module top(
     );
 
     // B. Format the data into an AXI Stream for the HDMI Encoder
-    
-    always @(posedge clk_25M) begin
-        if (!sys_rst_n) tvalid_q <= 0;
-        else tvalid_q <= fifo_rd_en;
-    end
-
-    // Convert 16-bit RGB565 to 24-bit RGB888
-   // B. Format the data into an AXI Stream for the HDMI Encoder
-   // B. Format the data into an AXI Stream for the HDMI Encoder
-    wire [4:0] r5 = lcd_queue_data_out[15:11];
-    wire [5:0] g6 = lcd_queue_data_out[10:5];
-    wire [4:0] b5 = lcd_queue_data_out[4:0];
-
-    reg tvalid_q;
-    reg [23:0] rgb888_q; 
-    reg start_of_frame_q; // New register for the frame sync flag
-
-    always @(posedge clk_25M) begin
-        if (!sys_rst_n) begin
-            tvalid_q <= 0;
-            rgb888_q <= 24'd0;
-            start_of_frame_q <= 0;
-        end else begin
-            tvalid_q <= fifo_rd_en;
-            rgb888_q <= {r5, r5[4:2], g6, g6[5:4], b5, b5[4:2]}; 
-            start_of_frame_q <= lcd_queue_data_out[16]; // Grab the secret bit 16 flag!
-        end
-    end// B. Format the data into an AXI Stream for the HDMI Encoder
     wire [4:0] r5 = lcd_queue_data_out[15:11];
     wire [5:0] g6 = lcd_queue_data_out[10:5];
     wire [4:0] b5 = lcd_queue_data_out[4:0];
@@ -229,17 +198,6 @@ module top(
             start_of_frame_q <= lcd_queue_data_out[16]; // Grab the secret bit 16 flag!
         end
     end
-
-    // Keep track of the first pixel of the frame
-    reg [18:0] pixel_cnt;
-    always @(posedge clk_25M) begin
-        if (!sys_rst_n) pixel_cnt <= 0;
-        else if (tvalid_q && in_axis_tready) begin
-            if (pixel_cnt == (640*480 - 1)) pixel_cnt <= 0;
-            else pixel_cnt <= pixel_cnt + 1;
-        end
-    end
-    wire start_of_frame = (pixel_cnt == 0);
 
     // C. Send to HDMI Module
     svo_hdmi hdmi_out (
@@ -250,11 +208,10 @@ module top(
         .locked(hdmi_lock),
 
         // AXI Interface
-        // AXI Interface
         .in_axis_tvalid(tvalid_q),
         .in_axis_tready(in_axis_tready),
-        .in_axis_tdata(rgb888_q),  // <-- CHANGE THIS LINE
-        .in_axis_tuser(start_of_frame),
+        .in_axis_tdata(rgb888_q),
+        .in_axis_tuser(start_of_frame_q), // <-- Safely using the bit-16 flag
 
         // Physical HDMI Pins
         .tmds_clk_n(tmds_clk_n),
@@ -262,5 +219,27 @@ module top(
         .tmds_d_n(tmds_d_n),
         .tmds_d_p(tmds_d_p)
     );
+
+    // =========================================================
+    // 6-LED DIAGNOSTIC DASHBOARD (Active-Low: 0 = ON)
+    // =========================================================
+    
+    // Pin 10: HDMI PLL Clock is LOCKED and running at 125MHz
+    assign led_out = ~hdmi_lock; 
+    
+    // Pin 11: PSRAM PLL Clock is LOCKED and running at 135MHz
+    assign led_out1 = ~psram_lock; 
+    
+    // Pin 13: Camera I2C Configuration is COMPLETE
+    assign debug_led = ~config_done; 
+    
+    // Pin 14: PSRAM Hardware Initialization is COMPLETE
+    assign status_leds[0] = ~init_done_0; 
+    
+    // Pin 15: Camera is actively sending frames (This will FLICKER rapidly)
+    assign status_leds[1] = ~v_sync_i; 
+
+    // Pin 16: Currently Unused. Keep it OFF (1)
+    assign status_leds[2] = 1'b1;
 
 endmodule
